@@ -19,6 +19,7 @@ Agent 决策网关：把「模型的判定」变成可缓存、可计量、可�
 | [`docs/reproduction-report.md`](docs/reproduction-report.md) | 跨硬件复现 + **一处重要更正**：同配置两次运行会翻转 2/144，噪声地板高于最初的判断 |
 | [`docs/perf-benchmark.md`](docs/perf-benchmark.md) | 真实 240 行基准：冷启动 9.48 decisions/s（p50 95 ms），缓存命中 **1583×** |
 | [`docs/walkthrough.md`](docs/walkthrough.md) | **端到端走查**：一条真实判定从业务问题走到最终动作，每步给出真实数据（含一次 argmax 会出错的精确平局） |
+| [`docs/scenario-human-escalation.md`](docs/scenario-human-escalation.md) | 场景迁移评估：换成「判断提问是否需要人工介入」是否可行，以及最大的坑（标签） |
 | [`docs/contract.md`](docs/contract.md) | **黑盒契约**：期望输入什么、期望输出什么、哪些**不在**保证范围内 |
 | [`docs/cloud-gpu-notes.md`](docs/cloud-gpu-notes.md) | 云 GPU 实操笔记：选卡策略、环境搭建的坑、换源提速、计费误解、归档清单 |
 
