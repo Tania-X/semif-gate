@@ -18,6 +18,7 @@ Agent 决策网关：把「模型的判定」变成可缓存、可计量、可�
 | [`docs/integration-log-silent-bugs.md`](docs/integration-log-silent-bugs.md) | 真实联调暴露的两个**静默** bug：标签顺序贴错（概率互换而哈希校验照样通过）、前缀复用给出错误分布 |
 | [`docs/reproduction-report.md`](docs/reproduction-report.md) | 跨硬件复现 + **一处重要更正**：同配置两次运行会翻转 2/144，噪声地板高于最初的判断 |
 | [`docs/perf-benchmark.md`](docs/perf-benchmark.md) | 真实 240 行基准：冷启动 9.48 decisions/s（p50 95 ms），缓存命中 **1583×** |
+| [`docs/cloud-gpu-notes.md`](docs/cloud-gpu-notes.md) | 云 GPU 实操笔记：选卡策略、环境搭建的坑、换源提速、计费误解、归档清单 |
 
 > ⚠️ 这些报告里有**三处对早期结论的更正**，均显式标注，没有悄悄改掉。
 
