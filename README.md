@@ -1,11 +1,25 @@
 # semif-gate
 
-Agent 决策网关的**第 1–3 步**实现：把「模型的判定」变成可缓存、可计量、可审计、可评测的基础设施。
+Agent 决策网关：把「模型的判定」变成可缓存、可计量、可审计、可评测的基础设施。
 
-> 完整设计见 [`../semif-gate-design.md`](../semif-gate-design.md)。
+> 设计文档见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 > 已实现：`contract/`、`state/`、`registry/`、`cache/`、`gate/`、`audit/`、`policy/`，
-> 以及三个 Provider（回放 / HTTP / 规则降级）。
-> **尚未实现**：`cli/` 与 Python 侧推理服务。
+> 三个 Provider（回放 / HTTP / 规则降级），以及端到端与性能基准程序。
+> **181 个测试全绿**，已与真实模型联调通过
+> （Python 服务见 [semif-service](https://github.com/Tania-X/semif-service)）。
+
+## 结论与实测报告
+
+本仓库的每一条设计约束都来自实测，不是推论。报告在 [`docs/`](docs/)：
+
+| 报告 | 结论 |
+|---|---|
+| [`docs/finding-option-order-is-semantic.md`](docs/finding-option-order-is-semantic.md) | **选项顺序是语义的一部分**：按行内原始顺序渲染 144/144 命中已发布 prompt 哈希，字典序 0/144。顺序对判定的影响达 **30.6%**，而换 GPU 只有 **0.7%** |
+| [`docs/integration-log-silent-bugs.md`](docs/integration-log-silent-bugs.md) | 真实联调暴露的两个**静默** bug：标签顺序贴错（概率互换而哈希校验照样通过）、前缀复用给出错误分布 |
+| [`docs/reproduction-report.md`](docs/reproduction-report.md) | 跨硬件复现 + **一处重要更正**：同配置两次运行会翻转 2/144，噪声地板高于最初的判断 |
+| [`docs/perf-benchmark.md`](docs/perf-benchmark.md) | 真实 240 行基准：冷启动 9.48 decisions/s（p50 95 ms），缓存命中 **1583×** |
+
+> ⚠️ 这些报告里有**三处对早期结论的更正**，均显式标注，没有悄悄改掉。
 
 ---
 
@@ -244,10 +258,23 @@ SemIf 的读出口依赖一个硬前提：**每个选项的答案必须恰好是
 
 ---
 
-## 尚未实现（第 4 步）
+## 已完成 / 尚未完成
 
-- `cli/` —— `eval` / `diff` / `replay` / `verify-slot`（漂移门禁是重点）
-- Python 侧推理服务（约 150 行 FastAPI，复用 `semif_phase1.direct` / `mlx_backend`）
-- `JdbcDecisionCache` / `JdbcDecisionAudit` 的真实数据库集成测试
+**已完成**
 
-**刻意不做**：接真实模型或 tokenizer、Spring、任何需要 GPU 或外网的代码。
+- `contract/` `state/` `registry/` `cache/` `gate/` `audit/` `policy/`（181 测试）
+- 三个 Provider：`ReplayProvider`（离线回放真实预测）、`HttpProvider`（接推理服务）、
+  `RuleFallbackProvider`（永不失败的降级）
+- **Python 侧推理服务** —— 已独立为 [semif-service](https://github.com/Tania-X/semif-service)
+- `E2EGatewayMain` —— 真实模型端到端联调（输出与已发布预测逐位一致，Δ≤2e-7）
+- `PerfBenchMain` —— 四轮性能基准（全冷 / 全热 / 混合 / 同判定点新 state）
+
+**尚未完成**
+
+- `cli/` —— `eval` / `diff` / `replay` / `verify-slot`
+  （**漂移门禁是重点**；其设计前提已由 `docs/reproduction-report.md` 第 13 节修正）
+- `JdbcDecisionCache` / `JdbcDecisionAudit` 的**真实 Postgres 集成测试**
+  （现已实现的只有 SPI、内存实现与 DDL，SQL 未在真实 PG 上执行过）
+- 并发与长 state 场景未测（服务是单进程同步的）
+
+**刻意不做**：在网关内执行任何业务动作；语义近邻缓存；Spring；分布式/多租户。
