@@ -141,6 +141,9 @@ C (permitted)    = 0.050061
 
 **所以契约规定：永远返回完整分布。** 让策略层看见「这是一次平局」，而不是替它做一个它做不了的判断。
 
+> 注：策略层要真正利用这一点，还需要在分档规则里使用 `margin`——
+> 当前实现只看 `maxProbability`，这是第 6 节记录的待补缺口。
+
 ---
 
 ## 5. 第 4 层：输出契约
@@ -175,38 +178,69 @@ C (permitted)    = 0.050061
 
 ## 6. 第 5 层：策略层（纯 Java，不碰模型）
 
-网关**只给判定，不给动作**。动作由业务侧的策略决定：
+网关**只给判定，不给动作**。动作由业务侧的策略决定。
+本仓库自带一个最简策略引擎：
+
+```java
+public interface PolicyEngine {
+    String version();
+    Band   band(Decision decision);       // AUTO / REVIEW / REFUSE
+    Action onDegraded(String pointId);    // 降级时的保守动作
+}
+```
+
+它当前的分档规则**只看最高概率**：
+
+```java
+public Band band(Decision decision) {
+    if (!decision.ok()) {
+        return Band.REFUSE;               // 降级先判——绝不让它落进 AUTO
+    }
+    double max = decision.maxProbability();
+    if (max >= autoMin)   return Band.AUTO;      // 默认 0.90
+    if (max >= reviewMin) return Band.REVIEW;    // 默认 0.60
+    return Band.REFUSE;
+}
+```
+
+### 本例的实际结果
+
+```
+maxProbability = 0.474969   <   reviewMin (0.60)
+margin         = 0.000000
+→ band = REFUSE    （动作：SAFE_DEFAULT，即不放行）
+```
+
+业务侧的调用方式：
 
 ```java
 Decision d = result.decision(pointId);
 
 if (!d.ok()) {
-    // 降级：走保守分支，绝不当成"概率为 0"
-    return escalateToHuman(d.degradedReason());
+    return escalateToHuman(d.degradedReason());   // 绝不把降级当成"概率为 0"
 }
 
-if (d.margin() < 0.05) {
-    // ⚠️ 平局带 → 不自动执行
-    // 本例 margin == 0.000000，正是这一支
-    return queueForReview(d);
+switch (policy.band(d)) {
+    case AUTO   -> applyDecision(d.argmaxOption());
+    case REVIEW -> queueForReview(d);             // 人工复核
+    case REFUSE -> applySafeDefault(pointId);     // 保守动作
 }
-
-String winner = d.argmaxOption();          // 确定性：平局取字典序最小
-if (d.probabilityOf("prohibited").orElse(0) > 0.90) {
-    return blockSale();                     // 高置信度 → 自动执行
-}
-return queueForReview(d);
 ```
 
-### 本例的最终结论
-
-```
-margin = 0.000000  <  0.05
-→ 进入人工复核队列（不自动放行，也不自动拦截）
-```
-
-**这个结果是对的**：模型无法据此判定，因为证据里「允许内部复制」和「禁止销售」同时存在，
-连人工也需要确认。**系统没有假装自己知道。**
+> ⚠️ **一个已识别的设计缺口**
+>
+> 当前分档**只看 `maxProbability`，没有用 `margin`**。后果是：
+> **「两个选项各占 0.475 的精确平局」与「单个选项只有 0.475」被归为同一档**（都是 REFUSE）。
+>
+> 但这两者的语义不同：
+> - 精确平局 ⇒ 模型在两个都合理的答案间摇摆 ⇒ **更适合送人工复核**
+> - 普遍低置信 ⇒ 证据可能根本不足 ⇒ 保守拒绝更合适
+>
+> `Decision.margin()` 已实现，审计记录里也已经存了 `margin` 字段，
+> 但**分档策略尚未使用它**。这是一个明确的待补项（需要新的策略规则 + 测试）。
+>
+> 本案例恰好落在缺口上：它被判为 REFUSE（不放行），
+> 结果是**安全的**，但**丢失了「这是并列」这个信息**。
 
 ---
 
@@ -261,7 +295,7 @@ margin = 0.000000  <  0.05
    │                    ├─ 写缓存 + 落审计                        │
    │◄── 完整分布 ───────┤                     │                │
    │                                                             │
-   ├─ 策略层：margin=0 → 转人工                                   │
+   ├─ 策略层：max=0.475 < 0.60 → REFUSE（保守不放行）             │
 ```
 
 ---
@@ -273,7 +307,7 @@ margin = 0.000000  <  0.05
 | **模型不知道任何业务规则** | 规则和证据都在请求里。换业务不换模型 |
 | **promptSha256 可复现** | 「当时问了什么」有据可查 |
 | **返回完整分布而非单一答案** | 本例中 argmax 是**错的**，正确答案在并列位置 |
-| **策略层看不到模型** | 阈值、动作、降级路径全是纯 Java，可单测 |
+| **策略层看不到模型** | 阈值、动作、降级路径全是纯 Java，可单测（并暴露了一个待补缺口：分档未使用 margin） |
 | **降级是一等状态** | 服务挂了返回 DEGRADED + 原因，不伪装成"概率 0" |
 | **每次判定都留痕** | 事后可回答"为什么自动拦了/放了" |
 
