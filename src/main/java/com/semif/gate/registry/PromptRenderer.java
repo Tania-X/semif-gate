@@ -53,7 +53,7 @@ public final class PromptRenderer {
         requireNoUnknownPlaceholders(point);
         return template
                 .replace(STATE_PLACEHOLDER, stateJson)
-                .replace(QUESTION_PLACEHOLDER, point.question())
+                .replace(QUESTION_PLACEHOLDER, quote(point.question()))
                 .replace(OPTIONS_PLACEHOLDER, renderOptions(point));
     }
 
@@ -64,6 +64,100 @@ public final class PromptRenderer {
      * 每个选项带一个字母与一段描述，字母由模板顺序决定。
      * 字母只是模型读取用的槽位标识；语义对齐始终按 {@code optionId} 进行。
      */
+    /**
+     * 用 state 中**某一个字段的值**作为证据来渲染。
+     *
+     * <p>为什么需要它：SemIf 的 payload 形状是
+     * {@code {"evidence": <值>, "criterion": <值>, "options": [...]}}，
+     * 其中 {@code evidence} 是 state 里的**字段值**，不是整个 state 对象。
+     * 直接把整个 state JSON 塞进 {@code {{state}}} 会渲染出
+     * {@code {"evidence": {"evidence": ...}}} 这种嵌套结构——实测 prompt 从 701 字符
+     * 变成 846 字符，哈希自然对不上（且模型会在错误的输入上给出看似合理的输出）。
+     *
+     * @param point       判定点
+     * @param stateJson   state 的规范化 JSON
+     * @param evidenceKey state 中承载证据的字段名（通常是 {@code evidence}）
+     */
+    public static String renderWithField(DecisionPoint point, String stateJson, String evidenceKey) {
+        String value = extractFieldValue(stateJson, evidenceKey);
+        if (value == null) {
+            throw new RegistryException(
+                    "state 中找不到证据字段 " + evidenceKey + "：" + abbreviate(stateJson));
+        }
+        return render(point, value);
+    }
+
+    /**
+     * 从 JSON 对象里取出某个字段的**原始值文本**（不含字段名）。
+     *
+     * <p>刻意做成字符串级提取而非完整 JSON 解析：这样能保证逐字节复现原始序列化结果，
+     * 不会因为「解析再序列化」引入任何格式差异——prompt 哈希对格式极度敏感。
+     */
+    static String extractFieldValue(String stateJson, String field) {
+        if (stateJson == null) {
+            return null;
+        }
+        String needle = "\"" + field + "\":";
+        int at = stateJson.indexOf(needle);
+        if (at < 0) {
+            return null;
+        }
+        int start = at + needle.length();
+        if (start >= stateJson.length()) {
+            return null;
+        }
+        char first = stateJson.charAt(start);
+        if (first == '"') {
+            // 字符串值：扫到未被转义的收尾引号
+            int i = start + 1;
+            while (i < stateJson.length()) {
+                char c = stateJson.charAt(i);
+                if (c == '\\') {
+                    i += 2;
+                    continue;
+                }
+                if (c == '"') {
+                    return stateJson.substring(start, i + 1);
+                }
+                i++;
+            }
+            return null;
+        }
+        // 非字符串（对象/数组/数字）：按括号配平扫到值的结尾
+        int depth = 0;
+        int i = start;
+        boolean inString = false;
+        while (i < stateJson.length()) {
+            char c = stateJson.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i += 2;
+                    continue;
+                }
+                if (c == '"') {
+                    inString = false;
+                }
+            } else if (c == '"') {
+                inString = true;
+            } else if (c == '{' || c == '[') {
+                depth++;
+            } else if (c == '}' || c == ']') {
+                if (depth == 0) {
+                    break;
+                }
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                break;
+            }
+            i++;
+        }
+        return stateJson.substring(start, i).strip();
+    }
+
+    private static String abbreviate(String text) {
+        return text.length() <= 120 ? text : text.substring(0, 120) + "…";
+    }
+
     public static String renderOptions(DecisionPoint point) {
         AnswerStyle style = point.answerStyle();
         List<Option> options = point.options();
@@ -77,11 +171,13 @@ public final class PromptRenderer {
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < rendered.size(); i++) {
             if (i > 0) {
-                json.append(',');
+                json.append(", ");
             }
             Map<String, String> entry = rendered.get(i);
-            json.append("{\"description\":").append(quote(entry.get("description")))
-                    .append(",\"letter\":").append(quote(entry.get("letter"))).append('}');
+            // 键顺序与分隔符必须与 Python 的 json.dumps 默认行为一致：
+            // letter 在前、": " 与 ", " 带空格。任何偏差都会让 prompt 哈希对不上。
+            json.append("{\"letter\": ").append(quote(entry.get("letter")))
+                    .append(", \"description\": ").append(quote(entry.get("description"))).append('}');
         }
         return json.append(']').toString();
     }

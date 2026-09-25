@@ -54,12 +54,20 @@ public final class Fixtures {
      * 而白名单是「只有列出的字段才会进入 state」的闸门——漏掉它就回放不了。
      */
     public static StateNormalizer normalizer() {
-        return new StateNormalizer(Set.of("id", "service", "duration_s"));
+        return new StateNormalizer(Set.of("id", "service", "duration_s", "evidence"));
     }
 
-    /** 构造 state；{@code id} 用于对应 fixture 记录。 */
+    /**
+     * 构造 state；{@code id} 用于对应 fixture 记录。
+     *
+     * <p>带 {@code evidence} 字段：真实接入方的 state 里承载证据的字段就是它，
+     * 而 {@code PromptRenderer.renderWithField} 需要从 state 中取出该字段的**值**
+     * 作为 payload 的 evidence（而不是把整个 state 对象塞进去）。
+     */
     public static DecisionState state(String id) {
-        return normalizer().normalize(Map.of("id", id, "service", "checkout", "duration_s", 480));
+        return normalizer().normalize(Map.of(
+                "id", id, "service", "checkout", "duration_s", 480,
+                "evidence", "the service reported a latency spike"));
     }
 
     // ---------------------------------------------------------------- 判定点

@@ -93,8 +93,10 @@ class HttpProviderTest {
     /** 构造一个"正确"的响应：prompt 哈希与本地渲染一致。 */
     private static Response correctResponse(JsonNode request, Map<String, Double> distribution) {
         DecisionPoint point = point();
+        // 必须与生产代码走同一条渲染路径：
+        // payload 里的 evidence 是 state 中【该字段的值】，不是整个 state 对象。
         String promptHash = RegistryHasher.promptSha256(
-                PromptRenderer.render(point, request.get("state").toString()));
+                PromptRenderer.renderWithField(point, request.get("state").toString(), "evidence"));
         ObjectNode body = MAPPER.createObjectNode();
         var results = body.putArray("results");
         ObjectNode result = results.addObject();

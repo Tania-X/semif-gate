@@ -281,8 +281,8 @@ class DecisionPointRegistryTest {
 
         assertTrue(rendered.contains("\"service\":\"checkout\""), "必须包含证据");
         assertTrue(rendered.contains("证据是否支持该主张？"), "必须包含准则");
-        assertTrue(rendered.contains("\"letter\":\"A\""), "必须包含字母 A");
-        assertTrue(rendered.contains("\"letter\":\"B\""), "必须包含字母 B");
+        assertTrue(rendered.contains("\"letter\": \"A\""), "必须包含字母 A（SemIf 格式，带空格）");
+        assertTrue(rendered.contains("\"letter\": \"B\""), "必须包含字母 B（SemIf 格式，带空格）");
         assertTrue(rendered.contains("支持。"), "必须包含选项描述");
     }
 

@@ -74,6 +74,16 @@ public final class HttpProvider implements DecisionProvider {
      * @param httpClient 可注入的客户端（测试用）
      */
     public HttpProvider(String baseUrl, String providerId, Duration timeout, HttpClient httpClient) {
+        this(baseUrl, providerId, timeout, httpClient, DEFAULT_EVIDENCE_FIELD);
+    }
+
+    /**
+     * 完整构造。
+     *
+     * @param evidenceField state 中承载证据的字段名（部署配置，默认 {@code evidence}）
+     */
+    public HttpProvider(String baseUrl, String providerId, Duration timeout,
+                        HttpClient httpClient, String evidenceField) {
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalArgumentException("baseUrl 不能为空");
         }
@@ -90,6 +100,19 @@ public final class HttpProvider implements DecisionProvider {
         this.providerId = providerId;
         this.timeout = timeout;
         this.httpClient = httpClient;
+        this.evidenceField = evidenceField == null || evidenceField.isBlank()
+                ? DEFAULT_EVIDENCE_FIELD : evidenceField;
+    }
+
+    /** state 中承载证据的字段名。它是**部署配置**：不同接入方的 state 形状不同。 */
+    private static final String DEFAULT_EVIDENCE_FIELD = "evidence";
+
+    private final String evidenceField;
+
+    /** 设置证据字段名（链式，供部署时指定）。 */
+    public HttpProvider withEvidenceField(String field) {
+        return new HttpProvider(baseUrl, providerId, timeout, httpClient,
+                field == null || field.isBlank() ? DEFAULT_EVIDENCE_FIELD : field);
     }
 
     @Override
@@ -102,8 +125,15 @@ public final class HttpProvider implements DecisionProvider {
         // 先把本地渲染结果算出来——它同时用于构造请求和校验响应。
         Map<String, String> promptHashes = new LinkedHashMap<>();
         for (DecisionPoint point : points) {
-            promptHashes.put(point.id(),
-                    RegistryHasher.promptSha256(PromptRenderer.render(point, state.json())));
+            // 证据是 state 里的字段【值】，不是整个 state 对象——见 renderWithField 的说明
+            String renderedPrompt = PromptRenderer.renderWithField(point, state.json(), evidenceField);
+            promptHashes.put(point.id(), RegistryHasher.promptSha256(renderedPrompt));
+            if (Boolean.getBoolean("semif.gate.debugHttp")) {
+                System.err.println("[HttpProvider] state.json() = " + state.json());
+                System.err.println("[HttpProvider] prompt = " + renderedPrompt);
+                System.err.println("[HttpProvider] prompt 长度 = " + renderedPrompt.length());
+                System.err.println("[HttpProvider] promptSha256 = " + promptHashes.get(point.id()));
+            }
         }
 
         ObjectNode request = MAPPER.createObjectNode();
@@ -120,6 +150,13 @@ public final class HttpProvider implements DecisionProvider {
         String body;
         try {
             body = MAPPER.writeValueAsString(request);
+            if (Boolean.getBoolean("semif.gate.debugHttp")) {
+                System.err.println("[HttpProvider] 请求体: " + body);
+                System.err.println("[HttpProvider] body 长度(字符) = " + body.length()
+                        + ", UTF-8 字节 = " + body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+                java.nio.file.Files.writeString(
+                        java.nio.file.Path.of("/tmp/java-request-body.json"), body);
+            }
         } catch (IOException e) {
             return allDegraded(state, points, "请求序列化失败: " + e.getMessage());
         }
@@ -128,6 +165,11 @@ public final class HttpProvider implements DecisionProvider {
         try {
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + "/decide"))
+                    // 显式用 HTTP/1.1。Java HttpClient 默认会先尝试 h2c 升级，
+                    // 而 Uvicorn 不支持该升级（只记一条 "Unsupported upgrade request"），
+                    // 回落后请求体会丢失——服务端看到 body 为 null，直接 422。
+                    // 实测：curl / urllib 用 HTTP/1.1 正常，Java 默认升级则失败。
+                    .version(HttpClient.Version.HTTP_1_1)
                     .timeout(timeout)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -143,7 +185,13 @@ public final class HttpProvider implements DecisionProvider {
         }
 
         if (response.statusCode() != 200) {
-            return allDegraded(state, points, "http 状态码 " + response.statusCode());
+            // 带上响应体：服务端的校验错误信息全在这里，只报状态码会让排障无从下手
+            String detail = response.body() == null ? "" : response.body().strip();
+            if (detail.length() > 400) {
+                detail = detail.substring(0, 400) + "…";
+            }
+            return allDegraded(state, points,
+                    "http 状态码 " + response.statusCode() + (detail.isEmpty() ? "" : "：" + detail));
         }
 
         JsonNode payload;
