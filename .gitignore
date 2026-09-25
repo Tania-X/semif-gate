@@ -1,0 +1,17 @@
+# 构建产物
+target/
+
+# 本地 Maven 仓库与发行版缓存（沙箱环境下用项目内目录代替 ~/.m2）
+.mvn-repo/
+.mvn-user-home/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# 系统
+.DS_Store

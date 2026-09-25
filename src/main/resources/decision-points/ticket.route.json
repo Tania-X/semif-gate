@@ -1,0 +1,35 @@
+{
+  "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+  "_comment": "模型 revision 必须不可变：它进缓存键与审计记录，写 latest 会导致「这条判定是谁做的」永远无法回答。",
+  "points": [
+    {
+      "id": "ticket.route",
+      "version": 1,
+      "owner": "platform-team",
+      "frozenAt": "2026-09-25",
+      "question": "Which team owns the work described by this evidence?",
+      "answerStyle": "LETTER",
+      "options": [
+        { "id": "db_team", "description": "Database, storage, replication, or query performance." },
+        { "id": "app_team", "description": "Application logic, API behavior, or deploy artifacts." },
+        { "id": "sre", "description": "Infrastructure, capacity, or availability response." },
+        { "id": "network", "description": "Connectivity, DNS, TLS, or edge routing." }
+      ],
+      "template": "{\"evidence\": {{state}}, \"criterion\": {{question}}, \"options\": {{options}}}"
+    },
+    {
+      "id": "alert.is_real",
+      "version": 1,
+      "owner": "sre",
+      "frozenAt": "2026-09-25",
+      "question": "Does the evidence support that this alert reflects a real incident?",
+      "answerStyle": "LETTER",
+      "options": [
+        { "id": "real_incident", "description": "The evidence describes an actual service impact." },
+        { "id": "noise", "description": "The evidence indicates a false or self-resolving signal." },
+        { "id": "insufficient_evidence", "description": "The evidence is insufficient to decide." }
+      ],
+      "template": "{\"evidence\": {{state}}, \"criterion\": {{question}}, \"options\": {{options}}}"
+    }
+  ]
+}

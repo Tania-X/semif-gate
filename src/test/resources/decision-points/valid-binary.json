@@ -1,0 +1,18 @@
+{
+  "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+  "points": [
+    {
+      "id": "test.binary",
+      "version": 1,
+      "owner": "test-team",
+      "frozenAt": "2026-09-25",
+      "question": "Does the evidence support the claim?",
+      "answerStyle": "LETTER",
+      "options": [
+        { "id": "yes", "description": "The evidence supports the claim." },
+        { "id": "no", "description": "The evidence does not support the claim." }
+      ],
+      "template": "{\"evidence\": {{state}}, \"criterion\": {{question}}, \"options\": {{options}}}"
+    }
+  ]
+}
