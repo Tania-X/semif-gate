@@ -17,6 +17,7 @@ Agent 决策网关：把「模型的判定」变成可缓存、可计量、可�
 | [`docs/finding-option-order-is-semantic.md`](docs/finding-option-order-is-semantic.md) | **选项顺序是语义的一部分**：按行内原始顺序渲染 144/144 命中已发布 prompt 哈希，字典序 0/144。顺序对判定的影响达 **30.6%**，而换 GPU 只有 **0.7%** |
 | [`docs/integration-log-silent-bugs.md`](docs/integration-log-silent-bugs.md) | 真实联调暴露的两个**静默** bug：标签顺序贴错（概率互换而哈希校验照样通过）、前缀复用给出错误分布 |
 | [`docs/reproduction-report.md`](docs/reproduction-report.md) | 跨硬件复现 + **一处重要更正**：同配置两次运行会翻转 2/144，噪声地板高于最初的判断 |
+| [`docs/calibration-result.md`](docs/calibration-result.md) | **温度校准实测**：ECE 改善 15–16%（但不显著）；⭐ 单一温度会让部分任务族**恶化**；拟合温度与 SemIf 官方一致到 0.001 |
 | [`docs/perf-benchmark.md`](docs/perf-benchmark.md) | 真实 240 行基准：冷启动 9.48 decisions/s（p50 95 ms），缓存命中 **1583×** |
 | [`docs/glossary.md`](docs/glossary.md) | **术语地图**：一次判定走完全程，每个名词（state / logits / softmax / margin / ECE…）落在流程的哪一步 |
 | [`docs/walkthrough.md`](docs/walkthrough.md) | **端到端走查**：一条真实判定从业务问题走到最终动作，每步给出真实数据（含一次 argmax 会出错的精确平局） |
