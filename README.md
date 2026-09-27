@@ -22,6 +22,7 @@ Agent 决策网关：把「模型的判定」变成可缓存、可计量、可�
 | [`docs/glossary.md`](docs/glossary.md) | **术语地图**：一次判定走完全程，每个名词（state / logits / softmax / margin / ECE…）落在流程的哪一步 |
 | [`docs/walkthrough.md`](docs/walkthrough.md) | **端到端走查**：一条真实判定从业务问题走到最终动作，每步给出真实数据（含一次 argmax 会出错的精确平局） |
 | [`docs/scenario-human-escalation.md`](docs/scenario-human-escalation.md) | 场景迁移评估：换成「判断提问是否需要人工介入」是否可行，以及最大的坑（标签） |
+| [`docs/adopting-business-data.md`](docs/adopting-business-data.md) | 接入自有业务数据：family 按「判定形状」划分，不按业务主题；同形只加判据，不同形新建族并单独标定 |
 | [`docs/contract.md`](docs/contract.md) | **黑盒契约**：期望输入什么、期望输出什么、哪些**不在**保证范围内 |
 | [`docs/cloud-gpu-notes.md`](docs/cloud-gpu-notes.md) | 云 GPU 实操笔记：选卡策略、环境搭建的坑、换源提速、计费误解、归档清单 |
 
