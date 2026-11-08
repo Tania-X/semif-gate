@@ -1,13 +1,56 @@
 # semif-gate
 
-Agent 决策网关：把「模型的判定」变成可缓存、可计量、可审计、可评测的基础设施。
+**Agent 决策网关：把「模型的判定」变成可缓存、可计量、可审计、可复现的基础设施。**
 
-> 设计文档见 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
-> 已实现：`contract/`、`state/`、`registry/`、`cache/`、`gate/`、`audit/`、`policy/`，
-> 三个 Provider（回放 / HTTP / 规则降级），以及端到端与性能基准程序。
-> **181 个测试全绿**，已与真实模型联调通过
-> （Python 服务见 [semif-service](https://github.com/Tania-X/semif-service)）。
+> *An agent decision gateway — model verdicts become cacheable, metered, auditable infrastructure.*
 
+LLM Agent 做的判断，通常既不能审计、不能缓存、更不能复现。这个网关把一次判定包成不可变契约：
+完整概率分布 + 溯源信息 + 契约指纹进缓存键。于是同一个输入要么给出同一个判定，要么 fail closed。
+降级永远不猜。
+
+> **选项顺序改变了 30.6% 的判定，换一块 GPU 只改变 0.7%。**
+> 所以顺序现在进缓存键：复用旧结果在机制上不可能，而不是靠「记得升版本」。
+
+Java 17 · 不引入 Spring、不接数据库 · **181 个测试：不连外网 / 不依赖数据库 / 不需要 GPU**
+
+## 这个仓库在补什么
+
+`SemIf`（semantic inference）的方法很直接：把模型在「冻结判据 + 证据」上的概率分布当作判定本身，
+而不是让模型生成一段文字再解析。方法来自 [TheoLeeCJ/SemIf](https://github.com/TheoLeeCJ/SemIf)。
+
+它给你一个分布。但它不给缓存、不给审计、不给降级、不给复现。**这个仓库就是缺的那一半**：
+
+- **契约优先，不靠约定**：判定点是不可变的 `pointId@version`，版本进缓存键；注册表加载即校验，
+  答案槽位不过就拒绝启动。防线从「记得升版本」变成「机制上无法复用」。
+- **设计来自实测**：上面那个 30.6% 是真跑出来的，而且**推翻了我最初的设计**。
+- **联调抓到两个静默 bug**：标签顺序贴错（概率互换，而 prompt 哈希校验照样通过）、
+  前缀复用在混合注意力模型上给出错误分布（Δ=0.43，默认禁用）。
+
+## 两个仓库，一个系统
+
+```
+调用方
+  │
+  ▼
+semif-gate  (Java 17 · 本仓库)              semif-service  (Python)
+  ├─ contract/  判定点不可变  pointId@version
+  ├─ registry/  加载即校验，槽位不过拒绝启动
+  ├─ state/     规范化 + 哈希（先截断后哈希，由类型保证）
+  ├─ cache/     7 分量缓存键 ────── 命中的事实 ──────►
+  ├─ provider/  回放 / HTTP / 规则降级              (state, 冻结判定点)
+  ├─ audit/     每条判定必留痕                              │
+  └─ policy/    阈值分档（降级永远落 REFUSE）                ▼
+                                                 Qwen3.5-4B 一次前向
+                                                          │
+  ◄────────────── 概率分布 + prompt_sha256 ───────────────┘
+        （哈希不符返回 409，而不是给一个可能错位的分布）
+```
+
+**服务只提供事实（概率分布），网关只做策略（缓存 / 审计 / 降级 / 分档）。**
+
+**复现性**：[semif-service](https://github.com/Tania-X/semif-service) 与 SemIf 已发布预测
+**逐位一致（Δ ≤ 2e-7）**，prompt 哈希一致 —— 工程层可证明地没有改动研究语义。
+性能：冷启动 p50 95 ms（9.48 decisions/s），缓存命中 1583×。
 ## 结论与实测报告
 
 本仓库的每一条设计约束都来自实测，不是推论。报告在 [`docs/`](docs/)：
